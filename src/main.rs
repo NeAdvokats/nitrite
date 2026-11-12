@@ -15,7 +15,7 @@ struct Args {
 }
 
 fn main() {
-    let args = Args::parse(                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       );
+    let args = Args::parse();
     if let Some(pkgname) = args.install {
         let index = match function::read_index() {
             Ok(index) => index,
