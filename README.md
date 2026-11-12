@@ -36,4 +36,4 @@ The contents of `PKGDIR` mirror the structure of `~/.local`—for example,
 
 Building packages requires `sh` and build tools such as `gcc` and `make`.
 
-<a href="https://github.com/NeAdvokats/nitrite/README-ru.md">По-русски</a>
+<a href="https://github.com/NeAdvokats/nitrite/blob/main/README-ru.md">По-русски</a>
