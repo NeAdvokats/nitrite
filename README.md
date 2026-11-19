@@ -24,6 +24,7 @@ sudo mv nit /usr/bin/nit
 ```sh
 nit --sync              # download the index
 nit --install PACKAGE   # install a package
+nit --find PACKAGE      # search for a package
 ```
 
 `nit` downloads the archive, verifies its `sha256`, extracts it, validates `PKGINFO`,
@@ -31,7 +32,7 @@ runs `build.sh`, and copies the output into `~/.local`. Temporary files are remo
 after a successful installation.
 
 `build.sh` receives `SRCDIR` containing the source code and `PKGDIR` for the built files.
-The contents of `PKGDIR` mirror the structure of `~/.local`—for example,
+The contents of `PKGDIR` mirror the structure of `~/.local`, for example,
 `$PKGDIR/bin/sifetch` will be installed to `~/.local/bin/sifetch`.
 
 Building packages requires `sh` and build tools such as `gcc` and `make`.
