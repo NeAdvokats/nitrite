@@ -29,7 +29,7 @@ pub struct Package {
     pub sha256: String,
 }
 
-pub const MAIN_INDEX_URL: &str = "https://raw.githubusercontent.com/NeAdvokats/nitrite-repo/main/index.json";
+pub const MAIN_INDEX_URL: &str = "https://codeberg.org/n1tronium/nitrite-repo/raw/branch/main/index.json";
 
 pub fn read(path: &Path) -> Result<PkgInfo, String> {
     let pkgfile = fs::read_to_string(path)
