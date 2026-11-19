@@ -1,23 +1,24 @@
+use colored::Colorize;
+use dirs::cache_dir;
+use serde::Deserialize;
+use sha256::try_digest;
+use std::fs::{self, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use serde::Deserialize;
-use std::fs::{self, File};
-use dirs::cache_dir;
-use sha256::try_digest;
-use colored::Colorize;
 
 pub struct PkgInfo {
     pub name: String,
     pub version: String,
     pub description: String,
-    pub author : String,
+    pub author: String,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct Index {
     pub schema: u32,
     pub repository: String,
+    pub required: String,
     pub packages: Vec<Package>,
 }
 
@@ -27,9 +28,13 @@ pub struct Package {
     pub version: String,
     pub archive: String,
     pub sha256: String,
+    pub author: String,
 }
 
-pub const MAIN_INDEX_URL: &str = "https://codeberg.org/n1tronium/nitrite-repo/raw/branch/main/index.json";
+pub const MAIN_INDEX_URL: &str =
+    "https://codeberg.org/n1tronium/nitrite-repo/raw/branch/main/index.json";
+pub const VERSION: &str = "1.1.4";
+pub const SCHEMA: u32 = 2;
 
 pub fn read(path: &Path) -> Result<PkgInfo, String> {
     let pkgfile = fs::read_to_string(path)
@@ -71,17 +76,22 @@ pub fn read_index() -> Result<Index, String> {
         .ok_or_else(|| "cannot find cache dir".to_string())?
         .join("nitrite/index/main.json");
 
-    let index = fs::read_to_string(dir)
-        .map_err(|err| format!("main repository not synced -> {err}"))?;
+    let index =
+        fs::read_to_string(dir).map_err(|err| format!("main repository not synced -> {err}\n\n {} \n", " - Use the --sync flag to sync".dimmed()))?;
 
     let index = index.trim();
 
-    let json : Index = serde_json::from_str(&index)
-        .map_err(|err| format!("invalid index -> {err}"))?;
+    let json: Index =
+        serde_json::from_str(index).map_err(|err| format!("invalid index -> {err}"))?;
 
-    if json.schema != 1 {
-        return Err(format!("unsupported schema -> {}", json.schema));
+    if json.schema != SCHEMA {
+        return Err(format!("unsupported schema -> {}\n\n {} \n", json.schema, " - Please update to the latest version from https://codeberg.org/n1tronium/nitrite".dimmed()));
     }
+
+    if json.required != VERSION {
+        return Err(format!("\nprogram version does not match the repository\nexpected -> {}\ngot -> {}\n\n {} \n",VERSION.red(), json.required.red(), " - Please update to the latest version from https://codeberg.org/n1tronium/nitrite".dimmed()));
+    }
+
     Ok(json)
 }
 
@@ -94,14 +104,12 @@ pub fn find_package(pkgname: &str, index: &Index) -> Option<Package> {
     None
 }
 
-
 pub fn sync_main() -> Result<(), String> {
     let dir = cache_dir()
         .expect("cannot find cache dir")
         .join("nitrite/index");
 
-    fs::create_dir_all(&dir)
-        .map_err(|err| format!("cannot create {} -> {err}", dir.display()))?;
+    fs::create_dir_all(&dir).map_err(|err| format!("cannot create {} -> {err}", dir.display()))?;
 
     let part = dir.join("main.json.parted");
     let target = dir.join("main.json");
@@ -116,20 +124,18 @@ pub fn sync_main() -> Result<(), String> {
     let index : Index = serde_json::from_slice(&bytes)
         .map_err(|err| format!("invalid index -> {err}"))?;
 
-    if index.schema != 1 {
+    if index.schema != SCHEMA {
         return Err(format!("unsupported schema -> {}", index.schema));
     }
 
-    fs::write(&part, &bytes)
-        .map_err(|err| format!("cannot write {} -> {err}", part.display()))?;
+    fs::write(&part, &bytes).map_err(|err| format!("cannot write {} -> {err}", part.display()))?;
     fs::rename(&part, &target)
         .map_err(|err| format!("cannot rename {} -> {err}", part.display()))?;
 
     Ok(())
 }
 
-
-pub fn download_archive(pkg : &Package) -> Result<PathBuf, String> {
+pub fn download_archive(pkg: &Package) -> Result<PathBuf, String> {
     let dir = cache_dir()
         .expect("cannot find cache dir")
         .join("nitrite/archives");
@@ -138,8 +144,7 @@ pub fn download_archive(pkg : &Package) -> Result<PathBuf, String> {
     let part = dir.join(format!("{file_name}.parted"));
     let target = dir.join(&file_name);
 
-    fs::create_dir_all(&dir)
-        .map_err(|err| format!("cannot create {} -> {err}", dir.display()))?;
+    fs::create_dir_all(&dir).map_err(|err| format!("cannot create {} -> {err}", dir.display()))?;
 
     let mut response = ureq::get(&pkg.archive)
         .call()
@@ -155,7 +160,7 @@ pub fn download_archive(pkg : &Package) -> Result<PathBuf, String> {
 
     drop(file);
 
-    print!("{}", "verifying sha256... ");
+    print!("verifying sha256... ");
     let _ = std::io::stdout().flush();
 
     let actual = sha256_file(&part)?;
@@ -164,7 +169,10 @@ pub fn download_archive(pkg : &Package) -> Result<PathBuf, String> {
         let _ = fs::remove_file(&part);
         return Err(format!(
             "\nsha256 mismatch for '{}'\nexpected -> {}\ngot -> {}",
-            pkg.name.bright_blue(), pkg.sha256.red(), actual.red()));
+            pkg.name.bright_blue(),
+            pkg.sha256.red(),
+            actual.red()
+        ));
     }
 
     println!("{}\n", "ok".green().bold());
@@ -175,24 +183,22 @@ pub fn download_archive(pkg : &Package) -> Result<PathBuf, String> {
 }
 
 fn sha256_file(path: &Path) -> Result<String, String> {
-    try_digest(path)
-        .map_err(|err| format!("cannot hash {} -> {err}", path.display()))
+    try_digest(path).map_err(|err| format!("cannot hash {} -> {err}", path.display()))
 }
 
 pub fn extract_archive(archive: &Path, dest: &Path) -> Result<(), String> {
-    fs::create_dir_all(dest)
-    .map_err(|err| format!("cannot create {} -> {err}", dest.display()))?;
+    fs::create_dir_all(dest).map_err(|err| format!("cannot create {} -> {err}", dest.display()))?;
 
-    let file = File::open(archive)
-    .map_err(|err| format!("cannot open {} -> {err}", archive.display()))?;
+    let file =
+        File::open(archive).map_err(|err| format!("cannot open {} -> {err}", archive.display()))?;
 
     let decoder = zstd::Decoder::new(file)
-    .map_err(|err| format!("cannot decode {} -> {err}", archive.display()))?;
+        .map_err(|err| format!("cannot decode {} -> {err}", archive.display()))?;
 
     let mut tar = tar::Archive::new(decoder);
 
     tar.unpack(dest)
-    .map_err(|err| format!("cannot extract {} -> {err}", archive.display()))?;
+        .map_err(|err| format!("cannot extract {} -> {err}", archive.display()))?;
 
     Ok(())
 }
@@ -203,14 +209,16 @@ pub fn pkgfile_difference(pkg: &Package, pkginfo_path: &Path) -> Result<(), Stri
     if info.name != pkg.name {
         return Err(format!(
             "\nPKGINFO name mismatch\nexpected -> {}\ngot -> {}",
-            pkg.name.red(), info.name.red()
+            pkg.name.red(),
+            info.name.red()
         ));
     }
 
     if info.version != pkg.version {
         return Err(format!(
             "\nPKGINFO version mismatch\nexpected -> {}\ngot -> {}",
-            pkg.version.red(), info.version.red()
+            pkg.version.red(),
+            info.version.red()
         ));
     }
 
@@ -249,11 +257,10 @@ pub fn check_staging(staged: &Path) -> Result<usize, String> {
     fn count_files(dir: &Path) -> Result<usize, String> {
         let mut count = 0;
 
-        for entry in fs::read_dir(dir)
-            .map_err(|err| format!("cannot read {} -> {err}", dir.display()))?
+        for entry in
+            fs::read_dir(dir).map_err(|err| format!("cannot read {} -> {err}", dir.display()))?
         {
-            let entry = entry
-                .map_err(|err| format!("cannot read {} -> {err}", dir.display()))?;
+            let entry = entry.map_err(|err| format!("cannot read {} -> {err}", dir.display()))?;
             let path = entry.path();
             let kind = entry
                 .file_type()
@@ -272,18 +279,17 @@ pub fn check_staging(staged: &Path) -> Result<usize, String> {
     let count = count_files(staged)?;
     let word = if count == 1 { "file" } else { "files" };
 
-    println!("\n{} {} {}", "checking staging...", count, word);
+    println!("\nchecking staging... {} {}", count, word);
 
     Ok(count)
 }
 
 pub fn install_staging(staged: &Path) -> Result<(), String> {
     fn copy_files(src: &Path, dst: &Path) -> Result<(), String> {
-        for entry in fs::read_dir(src)
-            .map_err(|err| format!("cannot read {} -> {err}", src.display()))?
+        for entry in
+            fs::read_dir(src).map_err(|err| format!("cannot read {} -> {err}", src.display()))?
         {
-            let entry = entry
-                .map_err(|err| format!("cannot read {} -> {err}", src.display()))?;
+            let entry = entry.map_err(|err| format!("cannot read {} -> {err}", src.display()))?;
             let from = entry.path();
             let to = dst.join(entry.file_name());
             let kind = entry
@@ -355,4 +361,3 @@ pub fn unpack_package(pkg: &Package) -> Result<PathBuf, String> {
 
     build_package(pkg, &tmp)
 }
-
