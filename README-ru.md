@@ -24,6 +24,7 @@ sudo mv nit /usr/bin/nit
 ```sh
 nit --sync              # скачать индекс
 nit --install PACKAGE   # установить пакет
+nit --find PACKAGE      # ищет конкретный пакет в репозитории
 ```
 
 `nit` скачивает архив, проверяет `sha256`, распаковывает его, проверяет `PKGINFO`,
