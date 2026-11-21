@@ -182,7 +182,9 @@ pub fn download_archive(pkg: &Package) -> Result<PathBuf, String> {
     Ok(target)
 }
 
-fn sha256_file(path: &Path) -> Result<String, String> {
+// все методы что идут после этого сообщение полный шлак ебаный которая сгенерировала нейросеть
+
+fn sha256_file(path: &Path) -> Result<String, String> { 
     try_digest(path).map_err(|err| format!("cannot hash {} -> {err}", path.display()))
 }
 
